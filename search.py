@@ -202,7 +202,7 @@ class Query():
         print("\n\n")
         return
 
-#----------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 
 class FieldQuery():
 
@@ -213,9 +213,9 @@ class FieldQuery():
         self.end = 0
         self.qtype = qtype
         self.start = timeit.default_timer()
-        self.split(text)
-        # docs = self.lookup(self.text)
-        # self.rank(docs)
+        term_labels = self.split(text)
+        docs = self.lookup(self.text,term_labels)
+        self.rank(docs)
         self.end = timeit.default_timer()
 
     def process_query(self,text):
@@ -228,7 +228,21 @@ class FieldQuery():
 
     def split(self,text):
         query = text.strip().split(';')
+        term_labels = defaultdict(lambda: ['d'])
+
         print(query)
+
+        for field in query:
+            temp = field.split(':')
+            f = temp[0] 
+            terms = temp[1]
+
+            terms = self.process_query(terms)
+            for term in terms:
+                term_labels[term].append(f[0])
+
+        print(term_labels)
+        return term_labels
 
     def tokenize(self,text):
 
@@ -267,34 +281,56 @@ class FieldQuery():
 
         return text
 
-    def lookup(self,tokens):
+    def lookup(self,tokens,term_labels):
         query_listings = {}
 
-        for token in tokens:
-            query_listing = self.search(token).strip().split(' ')
+        for token in term_labels:
+            # print(token)
+            query_listing = self.search(token,':',f = open('./index/offset','r')).strip().split(' ')
             # print(query_listing)
 
             for i in range(len(query_listing)):
                 listing = query_listing[i]
-                listingdict = self.fieldsplit(listing)
+                listingdict = self.fieldsplit(listing,term_labels[token])
 
                 query_listing[i] = listingdict
             
             query_listings[token] = query_listing
-    
+
+        print(query_listings)
+        
         return self.get_matches(query_listings)
 
-    def fieldsplit(self,listing):
-        listingdict = {}
+    # def lookup(self,tokens,term_labels):
+    #     query_listings = {}
 
-        fields = ['t', 'b', 'i', 'c', 'r', 'l','d']
+    #     for token in tokens:
+    #         query_listing = self.search(token).strip().split(' ')
+    #         # print(query_listing)
+
+    #         for i in range(len(query_listing)):
+    #             listing = query_listing[i]
+    #             listingdict = self.fieldsplit(listing,term_labels)
+
+    #             query_listing[i] = listingdict
+            
+    #         query_listings[token] = query_listing
+    
+    #     return self.get_matches(query_listings)
+
+    def fieldsplit(self,listing,fields):
+        listingdict = {}
+        # print(fields)
+
         postinglist = re.findall('[a-z]|[0-9]{1,1000}',listing)
 
         # print(postinglist)
+        # print(listing)
 
         for item in range(len(postinglist)):
             cur = postinglist[item]
             if cur in fields:
+                # print(cur)
                 listingdict[cur] = int(postinglist[item+1])
         # print(listingdict)
         return listingdict
@@ -313,12 +349,12 @@ class FieldQuery():
         # print('\n')
         return sorteddict
             
-    def search(self,token):
+    def search(self,token,delim,f):
         # Compute filesize of open file sent to us
         global indexsize
+        indexsize = 0
 
         loc = token
-        f = open('./index/index','r')
 
         if indexsize == 0:
             indexsize = os.fstat(f.fileno()).st_size
@@ -334,30 +370,49 @@ class FieldQuery():
             # print "seek to: ",loc
             f.seek(loc)
             # Skip to beginning of line
-            while f.read(1).decode(errors='ignore') != '\n':
+            while f.read(1) != '\n':
                 pass
 
             line = f.readline()
-            row=line.split(':')
+            row=line.split(delim)
 
-            s=row[0]
-            post=row[1]
+            s = row[0]
+            if delim == ' ':
+                s=int(row[0])
+
+            # post=row[1]
+            # print(s)
+            # print(lookfor>s)
 
             if lookfor == s:
-                # print("Found")
+                # print("Found: ",lookfor)
+                if delim == ':':
+                    offsetval = int(row[1])
+                    ind = open('./index/index','r')
+                    ind.seek(offsetval)
+                    line = ind.readline()
+                
+                    post = line.split(':')[1]
+                
+                elif delim == ' ':
+                    post = row[1]
+
                 f.close()
+                # print("Found: ",lookfor)
                 return post  # Found
 
             if lookfor < s:
+                # print('h1')
                 # Split into lower half
                 hi=loc
 
             if lookfor > s:
+                # print('h2')
                 # Split into higher half
                 lo=loc
             
         # If not found
-        # print("Not Found")
+        # print("Not Found: ",lookfor)
         f.close()
         return False
 
