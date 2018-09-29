@@ -84,7 +84,7 @@ class Query():
 
         for token in tokens:
             query_listing = self.search(token,':',f = open('./index/offset','r')).strip().split(' ')
-            print(query_listing)
+            # print(query_listing)
 
             for i in range(len(query_listing)):
                 listing = query_listing[i]
@@ -113,15 +113,29 @@ class Query():
 
     def get_matches(self,query_listings):
         results = defaultdict(lambda: 0)
+        docs = defaultdict(lambda: 0)
+        weight = {'t':10000, 'b':50, 'i':25, 'c':10, 'r':10, 'l':10}
+
+        print(len(query_listings))
+        termcount = len(query_listings)
+
+        for token in query_listings:
+            for query_listing in query_listings[token]:
+                # print(query_listing)
+                for key in query_listing:
+                    if key == 'd':
+                        docs[query_listing['d']] += 1
 
         for token in query_listings:
             for query_listing in query_listings[token]:
                 for key in query_listing:
-                    if key != 'd':
-                        results[query_listing['d']] += query_listing[key]
+                    if key == 'd':
+                        curid = query_listing['d']
+                    if key != 'd' and int(docs[curid]/termcount) == 1:
+                        results[query_listing['d']] += query_listing[key]*docs[query_listing['d']]*weight[key]
 
         sorteddict = [(k, results[k]) for k in sorted(results, key=results.get, reverse=True)]
-        print(sorteddict)
+        # print(sorteddict)
         # print('\n')
         return sorteddict
             
@@ -171,7 +185,9 @@ class Query():
                     post = line.split(':')[1]
                 
                 elif delim == ' ':
-                    post = row[1]
+                    post = ''
+                    for i in range(1,len(row)):
+                        post += row[i]+' '
 
                 f.close()
                 return post  # Found
@@ -230,7 +246,7 @@ class FieldQuery():
         query = text.strip().split(';')
         term_labels = defaultdict(lambda: ['d'])
 
-        print(query)
+        # print(query)
 
         for field in query:
             temp = field.split(':')
@@ -241,7 +257,7 @@ class FieldQuery():
             for term in terms:
                 term_labels[term].append(f[0])
 
-        print(term_labels)
+        # print(term_labels)
         return term_labels
 
     def tokenize(self,text):
@@ -297,7 +313,7 @@ class FieldQuery():
             
             query_listings[token] = query_listing
 
-        print(query_listings)
+        # print(query_listings)
         
         return self.get_matches(query_listings)
 
@@ -337,15 +353,22 @@ class FieldQuery():
 
     def get_matches(self,query_listings):
         results = defaultdict(lambda: 0)
+        docs = defaultdict(lambda: 1)
+        weight = {'t':100000, 'b':50, 'i':25, 'c':10, 'r':10, 'l':10}
 
         for token in query_listings:
             for query_listing in query_listings[token]:
+                # print(query_listing)
                 for key in query_listing:
-                    if key != 'd':
-                        results[query_listing['d']] += query_listing[key]
+                    if key == 'd':
+                        docs[query_listing['d']] *= 2
+                    elif key != 'd':
+                        if key == 't':
+                            # print('weight,100000: ',query_listing['d'])
+                            results[query_listing['d']] += query_listing[key]*docs[query_listing['d']]*weight[key]
 
         sorteddict = [(k, results[k]) for k in sorted(results, key=results.get, reverse=True)]
-        # print(sorteddict)
+        print(sorteddict)
         # print('\n')
         return sorteddict
             
@@ -395,7 +418,9 @@ class FieldQuery():
                     post = line.split(':')[1]
                 
                 elif delim == ' ':
-                    post = row[1]
+                    post = ''
+                    for i in range(1,len(row)):
+                        post += row[i]+' '
 
                 f.close()
                 # print("Found: ",lookfor)
@@ -418,12 +443,10 @@ class FieldQuery():
 
     def rank(self,docs):
         for key,val in docs[:10]:
-            fp = open("./index/titles")
-            for i, line in enumerate(fp):
-                if i == key:
-                    print(line.strip())
-                elif i > key:
-                    break
+            fp = open("./index/titles",'r')
+            # print(key)
+            docs = self.search(key,' ',fp)
+            print(key,": ",docs)
             fp.close()
 
         print("\n\n")
